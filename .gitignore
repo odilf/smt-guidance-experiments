@@ -1,0 +1,6 @@
+/target
+*.db
+*.db-journal
+.direnv
+*.cbor
+test.smt2

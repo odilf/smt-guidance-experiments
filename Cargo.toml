@@ -1,0 +1,23 @@
+[package]
+name = "experiments"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+# cbor = "0.4.1"
+clap = { version = "4.5.38", features = ["derive"] }
+jiff = { version = "0.2.13", features = ["serde"] }
+minicbor = { version = "0.26.5", features = ["std"] }
+rand = { version = "0.9.1", features = ["serde"] }
+rsmt2 = "0.16.2"
+rusqlite = "0.35.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+walkdir = "2.5.0"
+wyrand = "0.3.2"
+# z3 = { version = "0.12.1", features = ["static-link-z3"] }
+z3 = "0.12.1"
