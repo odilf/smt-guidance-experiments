@@ -69,6 +69,7 @@ impl Problem {
         tactic: Tactic,
         implementation: Implementation,
         configuration: &Config,
+        iteration: u16,
     ) -> anyhow::Result<(Bench, z3::SatResult)> {
         solver.from_string(&*self.content);
 
@@ -99,6 +100,7 @@ impl Problem {
                 runtime,
                 statistics: solver.get_statistics().into(),
                 configuration: *configuration,
+                iteration,
             },
             sat,
         ))

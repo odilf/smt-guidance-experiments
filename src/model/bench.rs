@@ -19,6 +19,7 @@ pub struct Bench {
     pub statistics: Statistics,
     /// Configuration of the solver used.
     pub configuration: Config,
+    pub iteration: u16,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

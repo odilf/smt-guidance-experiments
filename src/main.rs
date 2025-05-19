@@ -45,6 +45,14 @@ enum Command {
     Run {
         implementation: Implementation,
         tactic_help: f32,
+
+        /// The iteration of the benchmark. There can only be one bench
+        /// for each solution per implementation, help pair.
+        ///
+        /// This is to keep the samples consistent and to be able to fill them in
+        /// and continue if the bench is stopped at any point for any reason.
+        #[arg(long, short)]
+        iteration: u16,
     },
 
     /// Export the benchmark data as CBOR
@@ -142,6 +150,7 @@ fn main() -> anyhow::Result<()> {
         Command::Run {
             implementation,
             tactic_help,
+            iteration,
         } => {
             let span = tracing::info_span!("init z3").entered();
             let cfg = Config::benchmark();
@@ -150,7 +159,7 @@ fn main() -> anyhow::Result<()> {
             span.exit();
 
             let mut conn = db::init(args.db_path)?;
-            let mut problems = db::iter_unbenched_problems(implementation, tactic_help);
+            let mut problems = db::iter_unbenched_problems(implementation, tactic_help, iteration);
 
             while let Some((problem, solution)) = problems.next(&mut conn)? {
                 let _span =
@@ -165,7 +174,7 @@ fn main() -> anyhow::Result<()> {
                 tracing::debug!(?solution.sat, ?tactic.bounds);
 
                 let (bench, sat) =
-                    problem.bench_with_tactic(&solver, tactic, implementation, &cfg)?;
+                    problem.bench_with_tactic(&solver, tactic, implementation, &cfg, iteration)?;
 
                 if sat != solution.sat.z3() {
                     tracing::error!(

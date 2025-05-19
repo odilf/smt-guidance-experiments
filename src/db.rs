@@ -39,6 +39,7 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
             runtime        INTEGER NOT NULL,
             statistics     TEXT NOT NULL,
             configuration  TEXT NOT NULL,
+            iteration      INTEGER NOT NULL,
             FOREIGN KEY(problem_id) REFERENCES problem(id)
         );
         CREATE INDEX IF NOT EXISTS idx_sat
@@ -100,12 +101,16 @@ pub fn iter_unsolved_problems() -> PagedIterator<Problem> {
 pub fn iter_unbenched_problems(
     implementation: Implementation,
     tactic_help: f32,
+    iteration: u16,
 ) -> PagedIterator<(Problem, Solution)> {
     let query = format!(
         r#"SELECT problem.id AS problem_id, path, content, solution.id AS solution_id, sat, model, unsat_core, solution.statistics AS sol_statistics
             FROM problem
             JOIN solution ON problem.id = solution.problem_id
-	    WHERE ("{implementation}", {tactic_help}) not in (SELECT implementation, tactic_help FROM bench WHERE bench.problem_id = problem.id)
+	    WHERE ("{implementation}", {tactic_help}) not in (
+	        SELECT implementation, tactic_help FROM bench
+	        WHERE bench.problem_id = problem.id AND bench.iteration = {iteration}
+	    )
 	    LIMIT (:limit) OFFSET (:offset)"#
     );
 
@@ -223,8 +228,9 @@ pub fn insert_bench(conn: &mut Connection, bench: &Bench, problem: &Problem) -> 
             time_start,
             runtime,
             statistics,
-            configuration
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            configuration,
+            iteration
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         (
             problem.id,
             &bench.implementation.to_str(),
@@ -234,6 +240,7 @@ pub fn insert_bench(conn: &mut Connection, bench: &Bench, problem: &Problem) -> 
             &runtime_micros,
             &to_string(&bench.statistics).unwrap(),
             &to_string(&bench.configuration).unwrap(),
+            &bench.iteration,
         ),
     )?;
 
