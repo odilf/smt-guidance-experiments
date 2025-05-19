@@ -53,15 +53,18 @@
             {
               default = mkShell {
                 Z3_SYS_Z3_HEADER = "UNSET";
+                LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages;
               };
 
               z3 = mkShell {
                 Z3_SYS_Z3_HEADER = "${pkgs.z3.dev}/include/z3.h";
+                LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages ++ [ pkgs.z3 ];
               };
               z3-noodler = mkShell {
                 Z3_SYS_Z3_HEADER = "${z3-noodler}/include/z3.h";
+                LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages ++ [
                   z3-noodler
                 ];
