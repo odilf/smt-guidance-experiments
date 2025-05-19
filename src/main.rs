@@ -57,7 +57,7 @@ enum Command {
 fn main() -> anyhow::Result<()> {
     let file_appender = RollingFileAppender::new(
         Rotation::HOURLY,
-        "/Users/study/.cache/z3-experiments/",
+        std::env::home_dir().unwrap().join(".cache/z3-experiments/"),
         "log",
     );
 

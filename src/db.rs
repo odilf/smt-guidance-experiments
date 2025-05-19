@@ -73,6 +73,7 @@ pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyh
         let program = fs::read_to_string(entry.path())?;
         let rows_changed = stmt.execute((entry.path().to_str(), program))?;
         assert_eq!(rows_changed, 1);
+        tracing::debug!("Saved to db");
     }
 
     Ok(())
@@ -193,7 +194,7 @@ pub fn insert_solution(
     solution: &Solution,
     problem: &Problem,
 ) -> anyhow::Result<()> {
-    conn.execute(
+    let rows_changed = conn.execute(
         "INSERT INTO solution (problem_id, sat, model, unsat_core, statistics) VALUES ($1, $2, $3, $4, $5)",
         (
             problem.id,
@@ -204,13 +205,16 @@ pub fn insert_solution(
         ),
     )?;
 
+    assert_eq!(rows_changed, 1);
+    tracing::debug!("Saved to db");
+
     Ok(())
 }
 
 pub fn insert_bench(conn: &mut Connection, bench: &Bench, problem: &Problem) -> anyhow::Result<()> {
     let runtime_micros = bench.runtime.total(Unit::Microsecond).unwrap();
 
-    conn.execute(
+    let rows_changed = conn.execute(
         "INSERT INTO bench (
             problem_id,
             implementation,
@@ -232,6 +236,9 @@ pub fn insert_bench(conn: &mut Connection, bench: &Bench, problem: &Problem) -> 
             &to_string(&bench.configuration).unwrap(),
         ),
     )?;
+
+    assert_eq!(rows_changed, 1);
+    tracing::debug!("Saved to db");
 
     Ok(())
 }
