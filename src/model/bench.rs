@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt, time::Duration};
 
 use clap::ValueEnum;
-use rand::{Rng, seq::IndexedRandom as _};
+use rand::{IndexedRandom as _, Rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use super::solution::Statistics;
@@ -181,7 +181,7 @@ impl Config {
         Self {
             proof_generation: true,
             model_generation: true,
-            timeout: Duration::from_secs(60 * 5),
+            timeout: Duration::from_secs(60 * 15),
             debug_ref_count: false,
         }
     }
@@ -190,7 +190,7 @@ impl Config {
         Self {
             proof_generation: false,
             model_generation: false,
-            timeout: Duration::from_secs(60 * 5),
+            timeout: Duration::from_secs(60 * 16),
             debug_ref_count: false,
         }
     }
