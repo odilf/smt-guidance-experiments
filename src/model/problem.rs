@@ -4,8 +4,8 @@ use anyhow::Context as _;
 
 use super::{
     Bench, Solution,
-    bench::{Config, Implementation, Tactic},
-    solution::Sat,
+    Bench, Solution,
+    Bench, Solution,
 };
 
 const SENTINEL_ID: u32 = 69420;
@@ -47,9 +47,10 @@ impl Problem {
                     anyhow::bail!("Interrupted.");
                 }
 
-                panic!();
+                tracing::warn!("Timed out!");
+
                 // TODO: Add `solver.reason_unknown` in metadata
-                // Sat::Unknown
+                Sat::Unknown
             }
         };
 
