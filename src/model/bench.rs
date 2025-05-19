@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt, time::Duration};
 
 use clap::ValueEnum;
-use rand::{IndexedRandom as _, Rng, Rng};
+use rand::{Rng, seq::IndexedRandom as _};
 use serde::{Deserialize, Serialize};
 
 use super::solution::Statistics;

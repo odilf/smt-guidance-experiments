@@ -4,8 +4,8 @@ use anyhow::Context as _;
 
 use super::{
     Bench, Solution,
-    Bench, Solution,
-    Bench, Solution,
+    bench::{Config, Implementation, Tactic},
+    solution::Sat,
 };
 
 const SENTINEL_ID: u32 = 69420;
