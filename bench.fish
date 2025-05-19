@@ -1,5 +1,3 @@
-#!/etc/profiles/per-user/study/bin/fish
-
 set -x RUST_BACKTRACE 1
 set -x RUST_LOG debug
 

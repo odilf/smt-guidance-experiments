@@ -45,27 +45,28 @@
         {
           formatter = pkgs.nixfmt-rfc-style;
 
-          devShells = {
-            default = pkgs.mkShell {
-              Z3_SYS_Z3_HEADER = "UNSET";
-              packages = packages;
-            };
+          devShells =
+            let
+              z3-noodler = inputs.z3-noodler.packages."${system}".default;
+              mkShell = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; };
+            in
+            {
+              default = mkShell {
+                Z3_SYS_Z3_HEADER = "UNSET";
+                packages = packages;
+              };
 
-            z3 = pkgs.mkShell {
-              Z3_SYS_Z3_HEADER = "${pkgs.z3.dev}/include/z3.h";
-              packages = packages ++ [ pkgs.z3 ];
-            };
-            z3-noodler =
-              let
-                z3-noodler = inputs.z3-noodler.packages."${system}".default;
-              in
-              pkgs.mkShell {
+              z3 = mkShell {
+                Z3_SYS_Z3_HEADER = "${pkgs.z3.dev}/include/z3.h";
+                packages = packages ++ [ pkgs.z3 ];
+              };
+              z3-noodler = mkShell {
                 Z3_SYS_Z3_HEADER = "${z3-noodler}/include/z3.h";
                 packages = packages ++ [
                   z3-noodler
                 ];
               };
-          };
+            };
         };
     };
 }
