@@ -175,6 +175,8 @@ pub struct Config {
     model_generation: bool,
     timeout: Duration,
     debug_ref_count: bool,
+    memory_high_watermark_mb: usize,
+    memory_max_size_mb: usize,
 }
 
 impl Config {
@@ -184,6 +186,8 @@ impl Config {
             model_generation: true,
             timeout: Duration::from_secs(60 * 15),
             debug_ref_count: false,
+            memory_high_watermark_mb: 3500,
+            memory_max_size_mb: 5000,
         }
     }
 
@@ -193,6 +197,8 @@ impl Config {
             model_generation: false,
             timeout: Duration::from_secs(60 * 16),
             debug_ref_count: false,
+            memory_high_watermark_mb: 4000,
+            memory_max_size_mb: 6000,
         }
     }
 
@@ -202,6 +208,8 @@ impl Config {
         cfg.set_model_generation(self.model_generation);
         cfg.set_timeout_msec(u64::try_from(self.timeout.as_millis()).unwrap());
         cfg.set_debug_ref_count(self.debug_ref_count);
+        cfg.set_param_value("memory_high_watermark_mb", self.memory_high_watermark_mb);
+        cfg.set_param_value("memory_max_size", self.memory_max_size_mb);
         cfg
     }
 }
