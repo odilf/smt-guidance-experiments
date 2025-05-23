@@ -21,8 +21,14 @@ def _():
 
 
 @app.cell
-def _(pl, sqlite3):
-    conn = sqlite3.connect("../results.db")
+def _():
+    file = "../../../results-v03.db"
+    return (file,)
+
+
+@app.cell(hide_code=True)
+def _(file, pl, sqlite3):
+    conn = sqlite3.connect(file)
 
     # Select a statistic with a name from the key value pairs.
     statistic = (
@@ -43,6 +49,7 @@ def _(pl, sqlite3):
             FROM bench JOIN solution ON solution.problem_id = bench.problem_id""",
             connection=conn,
         )
+        .with_columns(runtime=pl.col("runtime") / 1e3)
         .with_columns(
             decoded=pl.col("statistics").str.json_decode(),
         )
@@ -52,34 +59,16 @@ def _(pl, sqlite3):
             conflicts=statistic("conflicts").str.to_decimal(),
             decisions=statistic("decisions").str.to_decimal(),
         )
+        .drop("decoded")
+        .drop("statistics")
     )
 
     df
 
-    # df.select(pl.col("statistics").str.json_extract())
+    print(f"Total data points: {len(df)}")
+    print(f"Number of solutions: {df.unique('problem_id').count()}")
+    df
     return (df,)
-
-
-@app.cell
-def _(pl):
-    # Example with a Series containing JSON strings with arrays
-    df2 = pl.DataFrame(
-        {
-            "json_val": [
-                '{"items":[{"key":"a","value":1},{"key":"b","value":2}]}'
-            ],
-            "json_val_caca": ['["caca", 1, 2]'],
-        }
-    )
-
-    # Extract the value where key is "b"
-    result = df2.with_columns(
-        # matched=pl.col("json_val").str.json_path_match("$.items[?(@.key=='b')].value"),
-        matched=pl.col("json_val_caca").str.json_path_match("$.[0]")
-    )
-
-    result
-    return
 
 
 @app.cell
@@ -118,31 +107,39 @@ def _(df, pl):
             .select("problem_id", col_a, col_b)
         )
 
-        relatives = cmp.get_column(col_a) / cmp.get_column(col_b) - 1
+        relatives = cmp.get_column(col_a) / cmp.get_column(col_b)
         absolutes = cmp.get_column(col_a) - cmp.get_column(col_b)
 
         return relatives, absolutes
 
 
-    column = "z3_time"
-    z3_relatives, z3_absolutes = compare_col("z3", 0.0, 0.9, column=column)
-    nood_relatives, nood_absolutes = compare_col("z3-noodler", 0.0, 0.9, column=column)
+    # columns = ["runtime", "z3_time", "memory", "conflicts", "decisions"]
+    columns = ["runtime", "z3_time", "decisions"]
 
-    print(f"z3_relative = {z3_relatives.mean():.3f} ± {z3_relatives.std():.3f}")
-    print(f"z3_absolute = {z3_absolutes.mean():.3f} ± {z3_absolutes.std():.3f}")
-    print(
-        f"noodler_relative = {nood_relatives.mean():.3f} ± {nood_relatives.std():.3f}"
-    )
-    print(
-        f"noodler_absulute = {nood_absolutes.mean():.3f} ± {nood_absolutes.std():.3f}"
-    )
-    return (
-        filter_bench,
-        nood_absolutes,
-        nood_relatives,
-        z3_absolutes,
-        z3_relatives,
-    )
+
+    def _():
+        for column in columns:
+            z3_relatives, z3_absolutes = compare_col("z3", 0.0, 0.9, column=column)
+            nood_relatives, nood_absolutes = compare_col(
+                "z3-noodler", 0.0, 0.9, column=column
+            )
+            print(f"\n--- {column} ---")
+            print(
+                f"z3_relative = {z3_relatives.mean():.3f} ± {z3_relatives.std():.3f}"
+            )
+            print(
+                f"z3_absolute = {z3_absolutes.mean():.3f} ± {z3_absolutes.std():.3f}"
+            )
+            print(
+                f"noodler_relative = {nood_relatives.mean():.3f} ± {nood_relatives.std():.3f}"
+            )
+            print(
+                f"noodler_absulute = {nood_absolutes.mean():.3f} ± {nood_absolutes.std():.3f}"
+            )
+
+
+    _()
+    return (filter_bench,)
 
 
 @app.cell
@@ -187,10 +184,9 @@ def _(df, filter_bench, pl):
 
 @app.cell
 def _(nood_relatives, np, plt, z3_relatives):
-
     plt.figure(dpi=300)
     # bin_edges = np.linspace(0, 29, 150)
-    bin_edges = np.linspace(-1, 10, 110)
+    bin_edges = np.linspace(0, 10, 110)
     plt.hist(z3_relatives, bin_edges)
     plt.ylabel("count")
     plt.xlabel("speedup")
