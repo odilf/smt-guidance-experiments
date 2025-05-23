@@ -14,6 +14,7 @@ const SENTINEL_ID: u32 = 69420;
 #[derive(Debug, Clone)]
 pub struct Problem {
     pub id: u32,
+    pub hash: u64,
     pub path: PathBuf,
     pub content: String,
 }

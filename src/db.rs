@@ -1,4 +1,10 @@
-use std::{borrow::Cow, fs, path::Path, vec};
+use std::{
+    borrow::Cow,
+    fs,
+    hash::{Hash, Hasher},
+    path::Path,
+    vec,
+};
 
 use jiff::Unit;
 use rusqlite::{Connection, Row, named_params};
@@ -17,6 +23,7 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
         "BEGIN;
         CREATE TABLE IF NOT EXISTS problem (
             id      INTEGER PRIMARY KEY,
+            hash    INTEGER NOT NULL,
             path    TEXT NOT NULL,
             content TEXT NOT NULL
         );
@@ -54,10 +61,18 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
     Ok(conn)
 }
 
+fn hash(program: &str) -> u64 {
+    let mut hasher = rustc_hash::FxHasher::default();
+    program.hash(&mut hasher);
+    // NOTE: Divided by two because otherwise sqlite fails
+    // with "out of range integral type conversion attempted"
+    hasher.finish() / 2
+}
+
 pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyhow::Result<()> {
     let _span = tracing::info_span!("populate db", ?dataset_path).entered();
 
-    let mut stmt = conn.prepare("INSERT INTO problem (path, content) VALUES(?1, ?2)")?;
+    let mut stmt = conn.prepare("INSERT INTO problem (hash, path, content) VALUES(?1, ?2)")?;
     let total = WalkDir::new(dataset_path).into_iter().count();
 
     tracing::info!("There are {total} entries");
@@ -72,7 +87,8 @@ pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyh
 
         tracing::debug!(file=?entry.path());
         let program = fs::read_to_string(entry.path())?;
-        let rows_changed = stmt.execute((entry.path().to_str(), program))?;
+        let hash = hash(&program);
+        let rows_changed = stmt.execute((hash, entry.path().to_str(), program))?;
         assert_eq!(rows_changed, 1);
         tracing::debug!("Saved to db");
     }
@@ -83,16 +99,17 @@ pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyh
 pub fn iter_unsolved_problems() -> PagedIterator<Problem> {
     PagedIterator::new(
         Cow::Borrowed(
-            "SELECT problem.id, path, content FROM problem
-            LEFT JOIN solution ON problem.id = solution.problem_id
+            "SELECT problem.id, hash, path, content FROM problem
             WHERE solution.problem_id IS NULL
+            LEFT JOIN solution ON problem.id = solution.problem_id
             LIMIT (:limit) OFFSET (:offset)",
         ),
         |row| {
             Ok(Problem {
                 id: row.get(0)?,
-                path: row.get::<_, String>(1)?.into(),
-                content: row.get(2)?,
+                hash: row.get(1).unwrap_or(69),
+                path: row.get::<_, String>(2)?.into(),
+                content: row.get(3)?,
             })
         },
     )
@@ -104,7 +121,7 @@ pub fn iter_unbenched_problems(
     iteration: u16,
 ) -> PagedIterator<(Problem, Solution)> {
     let query = format!(
-        r#"SELECT problem.id AS problem_id, path, content, solution.id AS solution_id, sat, model, unsat_core, solution.statistics AS sol_statistics
+        r#"SELECT problem.id AS problem_id, hash, path, content, solution.id AS solution_id, sat, model, unsat_core, solution.statistics AS sol_statistics
             FROM problem
             JOIN solution ON problem.id = solution.problem_id
 	    WHERE ("{implementation}", {tactic_help}) not in (
@@ -119,6 +136,7 @@ pub fn iter_unbenched_problems(
     PagedIterator::new(Cow::Owned(query), |row| {
         let problem = Problem {
             id: row.get("problem_id")?,
+            hash: row.get("hash")?,
             path: row.get::<_, String>("path")?.into(),
             content: row.get("content")?,
         };

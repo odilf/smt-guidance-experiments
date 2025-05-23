@@ -55,11 +55,11 @@ impl Sat {
         }
     }
 
-    pub fn generate_tactic(&self, help: f32, problem_id: u32) -> Option<Tactic> {
+    pub fn generate_tactic(&self, help: f32, problem_hash: u64) -> Option<Tactic> {
         assert!((0.0..=1.0).contains(&help));
 
         // Deterministic rng.
-        let mut rng = wyrand::WyRand::seed_from_u64(problem_id as u64);
+        let mut rng = wyrand::WyRand::seed_from_u64(problem_hash);
 
         let bounds = match self {
             Sat::Unknown => return None,

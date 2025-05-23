@@ -166,7 +166,7 @@ fn main() -> anyhow::Result<()> {
                     tracing::debug_span!("benching problem", ?problem.id, sat=?solution.sat.to_str())
                         .entered();
 
-                let Some(tactic) = solution.sat.generate_tactic(tactic_help, problem.id) else {
+                let Some(tactic) = solution.sat.generate_tactic(tactic_help, problem.hash) else {
                     tracing::warn!("Problem has no known sat model, skipping",);
                     continue;
                 };

@@ -208,8 +208,9 @@ impl Config {
         cfg.set_model_generation(self.model_generation);
         cfg.set_timeout_msec(u64::try_from(self.timeout.as_millis()).unwrap());
         cfg.set_debug_ref_count(self.debug_ref_count);
-        cfg.set_param_value("memory_high_watermark_mb", self.memory_high_watermark_mb);
-        cfg.set_param_value("memory_max_size", self.memory_max_size_mb);
+        // Apparently these don't work?
+        // cfg.set_param_value("memory_high_watermark_mb", &self.memory_high_watermark_mb);
+        // cfg.set_param_value("memory_max_size", self.memory_max_size_mb);
         cfg
     }
 }
