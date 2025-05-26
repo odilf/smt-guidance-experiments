@@ -23,9 +23,9 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
         "BEGIN;
         CREATE TABLE IF NOT EXISTS problem (
             id      INTEGER PRIMARY KEY,
-            hash    INTEGER NOT NULL,
-            path    TEXT NOT NULL,
-            content TEXT NOT NULL
+            hash    INTEGER NOT NULL UNIQUE,
+            path    TEXT NOT NULL UNIQUE,
+            content TEXT NOT NULL UNIQUE
         );
         CREATE TABLE IF NOT EXISTS solution (
             id             INTEGER PRIMARY KEY,
@@ -72,7 +72,11 @@ fn hash(program: &str) -> u64 {
 pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyhow::Result<()> {
     let _span = tracing::info_span!("populate db", ?dataset_path).entered();
 
-    let mut stmt = conn.prepare("INSERT INTO problem (hash, path, content) VALUES(?1, ?2)")?;
+    let mut stmt = conn.prepare(
+        "INSERT OR IGNORE
+        INTO problem (hash, path, content)
+        VALUES(?1, ?2, ?3)",
+    )?;
     let total = WalkDir::new(dataset_path).into_iter().count();
 
     tracing::info!("There are {total} entries");
@@ -81,16 +85,19 @@ pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyh
     for entry in WalkDir::new(dataset_path).into_iter().step_by(step) {
         let entry = entry?;
         if entry.path().is_dir() {
-            tracing::debug!(dir=?entry.path());
+            tracing::debug!(dir=?entry.path(), "entering directory");
             continue;
         }
 
-        tracing::debug!(file=?entry.path());
+        tracing::trace!(file=?entry.path());
         let program = fs::read_to_string(entry.path())?;
         let hash = hash(&program);
         let rows_changed = stmt.execute((hash, entry.path().to_str(), program))?;
-        assert_eq!(rows_changed, 1);
-        tracing::debug!("Saved to db");
+        match rows_changed {
+            1 => tracing::trace!(hash, "Saved to db"),
+            0 => tracing::debug!(hash, "Already in db"),
+            _ => panic!(),
+        }
     }
 
     Ok(())
