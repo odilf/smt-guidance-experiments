@@ -48,26 +48,32 @@
 
           devShells =
             let
-              z3-noodler = inputs.z3-noodler.packages."${system}".default;
+              env-variable-name = "BEFDLSKSEF_EXPERIMENTS_Z3_IMPLEMENTATION";
+              z3-noodler-pkg = inputs.z3-noodler.packages."${system}".default;
               mkShell = pkgs.mkShell.override { stdenv = pkgs.clangStdenv; };
             in
-            {
-              default = mkShell {
+            rec {
+              default = z3;
+
+              none = mkShell {
                 Z3_SYS_Z3_HEADER = "UNSET";
                 LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages;
               };
 
               z3 = mkShell {
+                "${env-variable-name}" = "z3";
                 Z3_SYS_Z3_HEADER = "${pkgs.z3.dev}/include/z3.h";
                 LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages ++ [ pkgs.z3 ];
               };
+
               z3-noodler = mkShell {
-                Z3_SYS_Z3_HEADER = "${z3-noodler}/include/z3.h";
+                "${env-variable-name}" = "z3-noodler";
+                Z3_SYS_Z3_HEADER = "${z3-noodler-pkg}/include/z3.h";
                 LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages ++ [
-                  z3-noodler
+                  z3-noodler-pkg
                 ];
               };
             };

@@ -1,5 +1,6 @@
 use std::{borrow::Cow, fmt, time::Duration};
 
+use anyhow::Context as _;
 use clap::ValueEnum;
 use rand::{Rng, seq::IndexedRandom as _};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,27 @@ impl Implementation {
             Self::Z3Noodler => "z3-noodler",
             Self::Z3Trau => "z3-trau",
         }
+    }
+
+    pub fn from_str(input: &str) -> anyhow::Result<Implementation> {
+        let implementation = match input {
+            "z3" => Self::Z3,
+            "z3-noodler" => Self::Z3Noodler,
+            "z3-trau" => Self::Z3Trau,
+            other => anyhow::bail!("Uknown z3 implementation: {other}"),
+        };
+
+        Ok(implementation)
+    }
+
+    pub fn from_env() -> anyhow::Result<Self> {
+        Self::from_str(
+            // Random characters to discourage a user from setting it.
+            // It should be set in the Nix environment.
+            std::env::var("BEFDLSKSEF_EXPERIMENTS_Z3_IMPLEMENTATION")
+                .context("Environment has not set a z3 implementation.")?
+                .as_str(),
+        )
     }
 }
 
@@ -175,6 +197,7 @@ pub struct Config {
     model_generation: bool,
     timeout: Duration,
     debug_ref_count: bool,
+    // TODO: These don't seem to work, for some reason... :(
     memory_high_watermark_mb: usize,
     memory_max_size_mb: usize,
 }
@@ -182,7 +205,8 @@ pub struct Config {
 impl Config {
     pub fn gen_model() -> Self {
         Self {
-            proof_generation: true,
+            // proof_generation: true,
+            proof_generation: false,
             model_generation: true,
             timeout: Duration::from_secs(60 * 15),
             debug_ref_count: false,

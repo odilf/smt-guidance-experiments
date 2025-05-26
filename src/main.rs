@@ -43,7 +43,6 @@ enum Command {
 
     /// Run the benchmark.
     Run {
-        implementation: Implementation,
         tactic_help: f32,
 
         /// The iteration of the benchmark. There can only be one bench
@@ -89,6 +88,9 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
+    let implementation = Implementation::from_env()?;
+    tracing::info!(?implementation);
+
     match args.command {
         Command::PopulateDb {
             dataset_path,
@@ -114,7 +116,7 @@ fn main() -> anyhow::Result<()> {
             let solver = z3::Solver::new(&ctx);
             span.exit();
 
-            let mut problems = db::iter_unsolved_problems();
+            let mut problems = db::iter_unsolved_problems(implementation);
             let mut index = 0;
             while let Some(problem) = problems.next(&mut conn)? {
                 let _span = tracing::debug_span!("solving problem", ?problem.id).entered();
@@ -124,7 +126,7 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 tracing::trace!(?problem);
-                let solution = match problem.solve(&solver) {
+                let solution = match problem.solve(&solver, implementation) {
                     Ok(s) => s,
                     Err(err) => {
                         tracing::error!(err = err.to_string());
@@ -148,7 +150,6 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Run {
-            implementation,
             tactic_help,
             iteration,
         } => {

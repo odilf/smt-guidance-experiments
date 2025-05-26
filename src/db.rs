@@ -29,7 +29,8 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
         );
         CREATE TABLE IF NOT EXISTS solution (
             id             INTEGER PRIMARY KEY,
-            problem_id     INTEGER NOT NULL UNIQUE,
+            problem_id     INTEGER NOT NULL,
+            implementation TEXT NOT NULL,
             sat            TEXT NOT NULL,
             model          TEXT NOT NULL,
             unsat_core     TEXT NOT NULL,
@@ -103,23 +104,32 @@ pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyh
     Ok(())
 }
 
-pub fn iter_unsolved_problems() -> PagedIterator<Problem> {
-    PagedIterator::new(
-        Cow::Borrowed(
-            "SELECT problem.id, hash, path, content FROM problem
-            WHERE solution.problem_id IS NULL
-            LEFT JOIN solution ON problem.id = solution.problem_id
-            LIMIT (:limit) OFFSET (:offset)",
-        ),
-        |row| {
-            Ok(Problem {
-                id: row.get(0)?,
-                hash: row.get(1).unwrap_or(69),
-                path: row.get::<_, String>(2)?.into(),
-                content: row.get(3)?,
-            })
-        },
-    )
+pub fn iter_unsolved_problems(implementation: Implementation) -> PagedIterator<Problem> {
+    // XXX
+    // Cow::Borrowed(
+    //     "SELECT problem.id, hash, path, content FROM problem
+    //     WHERE solution.problem_id IS NULL
+    //         AND solution.implementation
+    //     LEFT JOIN solution ON problem.id = solution.problem_id
+    //     LIMIT (:limit) OFFSET (:offset)",
+    // ),
+    let query = format!(
+        r#"SELECT problem.id, hash, path, content FROM problem
+	    WHERE ("{implementation}") not in (
+	        SELECT implementation FROM solution
+	        WHERE solution.problem_id = problem.id
+	    )
+	    LIMIT (:limit) OFFSET (:offset)"#
+    );
+
+    PagedIterator::new(Cow::Owned(query), |row| {
+        Ok(Problem {
+            id: row.get(0)?,
+            hash: row.get(1).unwrap_or(69),
+            path: row.get::<_, String>(2)?.into(),
+            content: row.get(3)?,
+        })
+    })
 }
 
 pub fn iter_unbenched_problems(
@@ -128,11 +138,12 @@ pub fn iter_unbenched_problems(
     iteration: u16,
 ) -> PagedIterator<(Problem, Solution)> {
     let query = format!(
-        r#"SELECT problem.id AS problem_id, hash, path, content, solution.id AS solution_id, sat, model, unsat_core, solution.statistics AS sol_statistics
+        r#"SELECT problem.id AS problem_id, hash, path, content,
+            solution.id AS solution_id, solution.implementation AS solution_impl, sat, model, unsat_core, solution.statistics AS sol_statistics
             FROM problem
-            JOIN solution ON problem.id = solution.problem_id
+            JOIN solution ON problem.id = solution.problem_id AND solution.implementation = "{implementation}"
 	    WHERE ("{implementation}", {tactic_help}) not in (
-	        SELECT implementation, tactic_help FROM bench
+	        SELECT bench.implementation, bench.tactic_help FROM bench
 	        WHERE bench.problem_id = problem.id AND bench.iteration = {iteration}
 	    )
 	    LIMIT (:limit) OFFSET (:offset)"#
@@ -148,16 +159,18 @@ pub fn iter_unbenched_problems(
             content: row.get("content")?,
         };
 
-        // TODO: Why is this extra quoted??
         let sat = match row.get::<_, String>("sat")?.as_ref() {
-            "\"sat\"" => Sat::Sat(from_str(row.get::<_, String>("model")?.as_ref())?),
-            "\"unsat\"" => Sat::Unsat(from_str(row.get::<_, String>("unsat_core")?.as_ref())?),
-            "\"unknown\"" => Sat::Unknown,
+            "sat" => Sat::Sat(from_str(row.get::<_, String>("model")?.as_ref())?),
+            "unsat" => Sat::Unsat(from_str(row.get::<_, String>("unsat_core")?.as_ref())?),
+            "unknown" => Sat::Unknown,
             x => unreachable!("Value is `{x}`"),
         };
 
         let solution = Solution {
             id: row.get("solution_id")?,
+            implementation: Implementation::from_str(
+                row.get::<_, String>("solution_impl")?.as_ref(),
+            )?,
             sat,
             statistics: from_str(row.get::<_, String>("sol_statistics")?.as_ref())?,
         };
@@ -225,10 +238,11 @@ pub fn insert_solution(
     problem: &Problem,
 ) -> anyhow::Result<()> {
     let rows_changed = conn.execute(
-        "INSERT INTO solution (problem_id, sat, model, unsat_core, statistics) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO solution (problem_id, implementation, sat, model, unsat_core, statistics) VALUES ($1, $2, $3, $4, $5, $6)",
         (
             problem.id,
-            &to_string(&solution.sat.to_str()).unwrap(),
+            &solution.implementation.to_str(),
+            &solution.sat.to_str(),
             &to_string(&solution.sat.model()).unwrap(),
             &to_string(&solution.sat.unsat_core()).unwrap(),
             &to_string(&solution.statistics).unwrap(),

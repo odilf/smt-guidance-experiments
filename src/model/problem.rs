@@ -20,7 +20,11 @@ pub struct Problem {
 }
 
 impl Problem {
-    pub fn solve(&self, solver: &z3::Solver) -> anyhow::Result<Solution> {
+    pub fn solve(
+        &self,
+        solver: &z3::Solver,
+        implementation: Implementation,
+    ) -> anyhow::Result<Solution> {
         solver.from_string(&*self.content);
         let sat = solver.check();
 
@@ -59,6 +63,7 @@ impl Problem {
 
         Ok(Solution {
             id: SENTINEL_ID,
+            implementation,
             sat,
             statistics,
         })

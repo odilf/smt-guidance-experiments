@@ -6,11 +6,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::bench::Bound;
 
-use super::bench::Tactic;
+use super::bench::{Implementation, Tactic};
 
 #[derive(Debug, Clone)]
 pub struct Solution {
     pub id: u32,
+    pub implementation: Implementation,
     pub sat: Sat,
     pub statistics: Statistics,
 }
