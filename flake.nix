@@ -40,6 +40,7 @@
             pkgs.sqlite
 
             pkgs.sqlitebrowser
+            pkgs.litecli
           ];
         in
         {
