@@ -1,19 +1,18 @@
-argparse i/iteration -- $argv
-or return
-
 set -x RUST_BACKTRACE 1
 set -x RUST_LOG debug
 
-nix develop .#z3-noodler --command fish -c "
-cargo run --release -- get-solutions
+set iteration 0
+while test $iteration -lt 5
+    for help in 0.0 0.9
+        set command "cargo run --release -- run $help --iteration $iteration"
+        echo Running `$command` !!
 
-cargo run --release -- run 0.0 --iteration $argv[1]
-cargo run --release -- run 0.9 --iteration $argv[1]
-"
+        # nix develop .#z3 --command fish -c "$command"
+        nix develop .#z3-noodler --command fish -c "$command"
 
-nix develop .#z3 --command fish -c "
-cargo run --release -- get-solutions
+    end
 
-cargo run --release -- run 0.0 --iteration $argv[1]
-cargo run --release -- run 0.9 --iteration $argv[1]
-"
+    set iteration (math $iteration + 1)
+end
+
+exit 0

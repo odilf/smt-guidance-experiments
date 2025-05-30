@@ -12,6 +12,7 @@ pub fn export(output_path: &Path, conn: &mut Connection) -> anyhow::Result<()> {
     let mut file = fs::File::options()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(output_path)?;
 
     let mut encoder = Encoder::new(Writer::new(file.by_ref()));
@@ -19,24 +20,21 @@ pub fn export(output_path: &Path, conn: &mut Connection) -> anyhow::Result<()> {
     let mut stmt = conn.prepare(
         "SELECT problem.id, runtime, statistics FROM bench
             JOIN problem ON problem.id = bench.problem_id
-        WHERE implementation = (:impl) AND tactic_help = (:tactic_help)",
+        WHERE implementation = (:impl) AND help = (:help)",
     )?;
 
     let implementations = ["z3", "z3-noodler"];
-    let tactic_helps = [0.0, 0.5];
+    let helps = [0.0, 0.5];
 
     encoder.map(implementations.len() as u64)?;
     for implementation in implementations {
-        encoder
-            .str(implementation)?
-            .map(tactic_helps.len() as u64)?;
+        encoder.str(implementation)?.map(helps.len() as u64)?;
 
-        tracing::warn!("yo");
-        for tactic_help in tactic_helps {
+        for help in helps {
             let iter = stmt
                 .query(named_params! {
                     ":impl": implementation,
-                    ":tactic_help": tactic_help,
+                    ":help": help,
                 })?
                 .and_then(|row| anyhow::Ok((row.get(0)?, row.get(1)?, row.get(2)?)));
 

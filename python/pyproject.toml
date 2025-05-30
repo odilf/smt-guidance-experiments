@@ -4,11 +4,16 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "aiosqlite>=0.21.0",
+    "colormath>=3.0.0",
+    "colorspacious>=1.1.2",
+    "marimo>=0.13.10",
     "matplotlib>=3.10.3",
     "numpy>=2.2.5",
-    "polars>=1.29.0",
+    "polars>=1.30.0",
+    "ruff>=0.11.13",
     "scipy>=1.15.3",
     "sqlalchemy>=2.0.41",
+    "toml>=0.10.2",
 ]
 
 [dependency-groups]

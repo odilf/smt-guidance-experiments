@@ -41,8 +41,8 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
             id             INTEGER PRIMARY KEY,
             problem_id     INTEGER NOT NULL,
             implementation TEXT NOT NULL,
-            tactic_bounds  TEXT NOT NULL,
-            tactic_help    FLOAT NOT NULL,
+            bounds  TEXT NOT NULL,
+            help    FLOAT NOT NULL,
             time_start     TEXT NOT NULL,
             runtime        INTEGER NOT NULL,
             statistics     TEXT NOT NULL,
@@ -50,12 +50,16 @@ pub fn init(path: Option<impl AsRef<Path>>) -> anyhow::Result<Connection> {
             iteration      INTEGER NOT NULL,
             FOREIGN KEY(problem_id) REFERENCES problem(id)
         );
-        CREATE INDEX IF NOT EXISTS idx_sat
+        CREATE INDEX IF NOT EXISTS idx_solution_sat
             ON solution (sat);
-        CREATE INDEX IF NOT EXISTS idx_implementation
+        CREATE INDEX IF NOT EXISTS idx_bench_implementation
             ON bench (implementation);
-        CREATE INDEX IF NOT EXISTS idx_implementation_tactic_help
-            ON bench (implementation, tactic_help);
+        CREATE INDEX IF NOT EXISTS idx_bench_implementation_help
+            ON bench (implementation, help);
+        CREATE INDEX IF NOT EXISTS idx_solution_problem_impl_sat
+            ON solution(problem_id, implementation, sat);
+        CREATE INDEX IF NOT EXISTS idx_bench_problem_impl_help_iter
+            ON bench (problem_id, implementation, help, iteration);
         COMMIT;",
     )?;
 
@@ -105,27 +109,32 @@ pub fn populate(conn: &mut Connection, dataset_path: &Path, small: bool) -> anyh
 }
 
 pub fn iter_unsolved_problems(implementation: Implementation) -> PagedIterator<Problem> {
-    // XXX
-    // Cow::Borrowed(
-    //     "SELECT problem.id, hash, path, content FROM problem
-    //     WHERE solution.problem_id IS NULL
-    //         AND solution.implementation
-    //     LEFT JOIN solution ON problem.id = solution.problem_id
-    //     LIMIT (:limit) OFFSET (:offset)",
-    // ),
     let query = format!(
-        r#"SELECT problem.id, hash, path, content FROM problem
-	    WHERE ("{implementation}") not in (
-	        SELECT implementation FROM solution
-	        WHERE solution.problem_id = problem.id
-	    )
-	    LIMIT (:limit) OFFSET (:offset)"#
+        r#"
+        SELECT * FROM (
+            SELECT
+                problem.id,
+                hash,
+                path,
+                content,
+                solution.sat AS sat,
+                solution_other.sat AS sat_other,
+                ROW_NUMBER() OVER (ORDER BY problem.id ASC) AS rownumber
+            FROM problem
+            LEFT JOIN solution ON solution.problem_id = problem.id AND solution.implementation = '{implementation}'
+            LEFT JOIN solution AS solution_other ON solution_other.problem_id = problem.id AND solution_other.implementation != '{implementation}'
+            WHERE solution.sat IS NULL
+        )
+        WHERE (sat_other = 'sat') OR (sat_other IS NULL AND rownumber % 1000 = 0)
+        ORDER BY sat_other DESC
+        LIMIT (:limit) OFFSET (:offset)
+	    "#
     );
 
     PagedIterator::new(Cow::Owned(query), |row| {
         Ok(Problem {
             id: row.get(0)?,
-            hash: row.get(1).unwrap_or(69),
+            hash: row.get(1)?,
             path: row.get::<_, String>(2)?.into(),
             content: row.get(3)?,
         })
@@ -134,22 +143,25 @@ pub fn iter_unsolved_problems(implementation: Implementation) -> PagedIterator<P
 
 pub fn iter_unbenched_problems(
     implementation: Implementation,
-    tactic_help: f32,
+    help: f32,
     iteration: u16,
 ) -> PagedIterator<(Problem, Solution)> {
     let query = format!(
         r#"SELECT problem.id AS problem_id, hash, path, content,
-            solution.id AS solution_id, solution.implementation AS solution_impl, sat, model, unsat_core, solution.statistics AS sol_statistics
-            FROM problem
-            JOIN solution ON problem.id = solution.problem_id AND solution.implementation = "{implementation}"
-	    WHERE ("{implementation}", {tactic_help}) not in (
-	        SELECT bench.implementation, bench.tactic_help FROM bench
-	        WHERE bench.problem_id = problem.id AND bench.iteration = {iteration}
+            solution.id AS solution_id, solution.implementation AS solution_impl,
+            solution.sat, solution.model, solution.unsat_core, solution.statistics AS sol_statistics
+        FROM problem
+            JOIN solution ON problem.id = solution.problem_id AND solution.implementation = '{implementation}' AND solution.sat='sat'
+            JOIN solution AS solution_other ON problem.id = solution_other.problem_id AND solution_other.implementation != '{implementation}' AND solution_other.sat='sat'
+        WHERE ('{implementation}', {help}, {iteration}) not in (
+	        SELECT bench.implementation, bench.help, bench.iteration FROM bench
+	        WHERE bench.problem_id = problem.id
 	    )
+	    ORDER BY problem.id
 	    LIMIT (:limit) OFFSET (:offset)"#
     );
 
-    tracing::debug!(?query);
+    tracing::trace!(?query);
 
     PagedIterator::new(Cow::Owned(query), |row| {
         let problem = Problem {
@@ -187,7 +199,7 @@ pub struct PagedIterator<T> {
 }
 
 impl<T> PagedIterator<T> {
-    const PAGE_SIZE: usize = 100;
+    const PAGE_SIZE: usize = 1000;
 
     pub fn new(query: Cow<'static, str>, into: fn(&Row<'_>) -> anyhow::Result<T>) -> Self {
         Self {
@@ -203,7 +215,9 @@ impl<T> PagedIterator<T> {
 
         stmt.query(named_params! {
             ":limit": Self::PAGE_SIZE,
-            ":offset": Self::PAGE_SIZE * self.page_index,
+            // TODO: Remove this alltogether.
+            // Since we mutate the table while iterating, we don't actually have to offset anything!
+            ":offset": 0,
         })?
         .and_then(|row| (self.into)(row))
         .collect()
@@ -262,8 +276,8 @@ pub fn insert_bench(conn: &mut Connection, bench: &Bench, problem: &Problem) -> 
         "INSERT INTO bench (
             problem_id,
             implementation,
-            tactic_bounds,
-            tactic_help,
+            bounds,
+            help,
             time_start,
             runtime,
             statistics,
@@ -273,8 +287,8 @@ pub fn insert_bench(conn: &mut Connection, bench: &Bench, problem: &Problem) -> 
         (
             problem.id,
             &bench.implementation.to_str(),
-            &to_string(&bench.tactic.bounds).unwrap(),
-            &to_string(&bench.tactic.help).unwrap(),
+            &to_string(&bench.constraints.bounds).unwrap(),
+            &to_string(&bench.constraints.help).unwrap(),
             &to_string(&bench.time_start).unwrap(),
             &runtime_micros,
             &to_string(&bench.statistics).unwrap(),

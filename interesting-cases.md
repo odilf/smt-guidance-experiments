@@ -1,0 +1,1 @@
+- `problem.id=2670`: Finds easily finds solution full of "d"s, but when adding a constraint that the solution contains a "d", it times out.

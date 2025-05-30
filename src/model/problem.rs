@@ -1,10 +1,12 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::mpsc, thread, time::Duration};
 
 use anyhow::Context as _;
 
+use crate::model::solution::Statistics;
+
 use super::{
     Bench, Solution,
-    bench::{Config, Implementation, Tactic},
+    bench::{Config, Constraints, Implementation},
     solution::Sat,
 };
 
@@ -69,46 +71,88 @@ impl Problem {
         })
     }
 
-    pub fn bench_with_tactic(
-        &self,
-        solver: &z3::Solver<'_>,
-        tactic: Tactic,
+    pub fn bench_with_constraints<'a, 'b>(
+        &'a self,
+        cfg: Config,
+        constraints: Constraints,
         implementation: Implementation,
         configuration: &Config,
         iteration: u16,
-    ) -> anyhow::Result<(Bench, z3::SatResult)> {
-        solver.from_string(&*self.content);
-
-        tactic.add_bounds_to_solver(solver);
-
+    ) -> anyhow::Result<(Bench, z3::SatResult, bool)> {
+        // Approximate time start, for database.
         let time_start = jiff::Timestamp::now();
-        let sat = solver.check();
-        let time_end = jiff::Timestamp::now();
 
-        let runtime = time_end - time_start;
+        let (sender, receiver) = mpsc::channel();
+        let handle = {
+            let content = self.content.clone();
+            let constraints = constraints.clone();
+
+            thread::spawn(move || {
+                let ctx = z3::Context::new(&cfg.z3());
+                let solver = z3::Solver::new(&ctx);
+                solver.from_string(content);
+                constraints.add_bounds_to_solver(&solver);
+
+                let time_start = jiff::Timestamp::now();
+                let sat = solver.check();
+                let time_end = jiff::Timestamp::now();
+                sender
+                    .send((
+                        time_end - time_start,
+                        sat,
+                        solver.get_reason_unknown(),
+                        Some(Statistics::from(solver.get_statistics())),
+                    ))
+                    .unwrap();
+            })
+        };
+
+        let timeout_time = || jiff::Timestamp::MAX - jiff::Timestamp::MIN;
+        let (mut runtime, sat, reason_unknown, statistics, timed_out_thread) =
+            match receiver.recv_timeout(cfg.timeout + Duration::from_secs(10)) {
+                Ok((runtime, sat, reason_unknown, statistics)) => {
+                    (runtime, sat, reason_unknown, statistics, false)
+                }
+                Err(_) => (
+                    timeout_time(),
+                    z3::SatResult::Unknown,
+                    Some("timeout".to_string()),
+                    None,
+                    true,
+                ),
+            };
 
         tracing::debug!(?runtime);
 
-        if solver
-            .get_reason_unknown()
-            .is_some_and(|reason| reason.contains("interrupted"))
-        {
-            anyhow::bail!("Interrupted.");
+        if let Some(reason) = reason_unknown {
+            if reason.is_empty() || reason == "unknown" {
+                // These are fine, I think.
+            } else if reason.contains("interrupted") {
+                anyhow::bail!("Interrupted.");
+            } else if reason.contains("timeout") || reason.contains("canceled") {
+                runtime = timeout_time();
+            } else {
+                tracing::error!(?reason, "Got unexpected unknown result");
+                anyhow::bail!("{}", reason)
+            }
         }
+
+        drop(handle);
 
         Ok((
             Bench {
                 id: SENTINEL_ID,
                 problem_id: self.id,
                 implementation,
-                tactic,
+                constraints,
                 time_start,
                 runtime,
-                statistics: solver.get_statistics().into(),
+                statistics: statistics.map(|s| s.into()),
                 configuration: *configuration,
                 iteration,
             },
             sat,
+            !timed_out_thread,
         ))
     }
 }

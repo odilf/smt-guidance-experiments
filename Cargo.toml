@@ -9,7 +9,9 @@ anyhow = "1.0.98"
 clap = { version = "4.5.38", features = ["derive"] }
 jiff = { version = "0.2.13", features = ["serde"] }
 minicbor = { version = "0.26.5", features = ["std"] }
+ordered-float = "5.0.0"
 rand = { version = "0.9.1", features = ["serde"] }
+rand_distr = "0.5.1"
 rsmt2 = "0.16.2"
 rusqlite = "0.35.0"
 rustc-hash = "2.1.1"

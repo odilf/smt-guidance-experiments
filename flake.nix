@@ -41,6 +41,8 @@
 
             pkgs.sqlitebrowser
             pkgs.litecli
+
+            pkgs.libertinus
           ];
         in
         {
@@ -62,8 +64,9 @@
               };
 
               z3 = mkShell {
-                "${env-variable-name}" = "z3";
+                "${env-variable-name}" = "z3str3";
                 Z3_SYS_Z3_HEADER = "${pkgs.z3.dev}/include/z3.h";
+                CARGO_TARGET_DIR = "target/z3str3";
                 LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages ++ [ pkgs.z3 ];
               };
@@ -71,6 +74,7 @@
               z3-noodler = mkShell {
                 "${env-variable-name}" = "z3-noodler";
                 Z3_SYS_Z3_HEADER = "${z3-noodler-pkg}/include/z3.h";
+                CARGO_TARGET_DIR = "target/z3-noodler";
                 LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
                 packages = packages ++ [
                   z3-noodler-pkg
